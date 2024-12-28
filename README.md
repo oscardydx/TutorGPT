@@ -23,3 +23,4 @@ python manage.py collectstatic
 ```python
 python manage.py runserver
 ```
+# TutorGPT
