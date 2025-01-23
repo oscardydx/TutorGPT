@@ -44,6 +44,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_browser_reload",
+    "chatbots",
+    
 ]
 
 MIDDLEWARE = [
@@ -83,13 +85,23 @@ WSGI_APPLICATION = "hello_world.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
+
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.mysql',
+#        'NAME': config("DB_DATABASE"),
+#        'USER': config("DB_USERNAME"),
+#        'PASSWORD': config("DB_PASSWORD"),
+#        'HOST': config("DB_HOST"),  # O la dirección IP del servidor MySQL
+#        'PORT': config("DB_PORT"),       # Puerto predeterminado de MySQL
+#    }
+#}
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',  # Motor de base de datos (SQLite)
+        'NAME': BASE_DIR / 'db.sqlite3',  # Ruta del archivo de base de datos
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -140,3 +152,8 @@ MEDIA_ROOT = BASE_DIR / "hello_world" / "media"
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+TOKEN_TELEGRAM = config("TOKEN_TELEGRAM")
+
+
+   
