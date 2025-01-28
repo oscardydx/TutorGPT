@@ -4,16 +4,17 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from decouple import config
 from transformers import pipeline
 
-# Crear un pipeline para generación de texto
-generator = pipeline("text-generation", model="EleutherAI/gpt-neo-1.3B")
-
-
+# Crear un pipeline para generación de texto usando DialoGPT
+generator = pipeline("text-generation", model="Upstage/SOLAR-10.7B-v1.0")
 
 # Configuración de logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+
+# Mantener un historial de la conversación para usar en las respuestas
+user_conversations = {}
 
 # Función para manejar mensajes de texto
 async def start(update: Update, context):
@@ -25,10 +26,33 @@ async def start(update: Update, context):
     await update.message.reply_text("¡Hola! Soy tu bot de Telegram. Por favor, comparte tu número de teléfono.", reply_markup=reply_markup)
 
 async def echo(update: Update, context):
-    # Prueba básica con truncation activado
-    output = generator(update.message.text, max_length=50, num_return_sequences=1, truncation=True)
+    user_id = update.message.from_user.id
+    user_message = update.message.text
 
-    await update.message.reply_text(f"Respuesta GPT: {output[0]['generated_text']}")
+    # Iniciar una nueva conversación si es el primer mensaje
+    if user_id not in user_conversations:
+        user_conversations[user_id] = []
+
+    # Añadir el mensaje del usuario al historial de conversación
+    user_conversations[user_id].append(f"Usuario: {user_message}")
+
+    # Solo utilizar el último mensaje para generar la respuesta
+    input_text = user_conversations[user_id][-1]
+
+    # Generar una respuesta con el modelo DialoGPT
+    conversation = generator(input_text, max_length=100, truncation=True)
+
+    # Imprimir la respuesta para depuración
+    print(conversation)  # Aquí vemos cómo está estructurada la respuesta
+
+    # Acceder a la respuesta generada
+    bot_response = conversation[0]['generated_text']
+
+    # Añadir la respuesta del bot al historial de conversación
+    user_conversations[user_id].append(f"Bot: {bot_response}")
+
+    # Enviar la respuesta al usuario
+    await update.message.reply_text(f" {bot_response}")
 
 # Función para manejar el número de teléfono enviado
 async def handle_contact(update: Update, context):
