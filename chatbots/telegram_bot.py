@@ -7,6 +7,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
 import torchvision
+torch.cuda.empty_cache()
+torch.cuda.reset_peak_memory_stats()
 
 print(f"PyTorch version: {torch.__version__}")
 print(f"Torchvision version: {torchvision.__version__}")
