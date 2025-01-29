@@ -26,7 +26,7 @@ if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
 # Crear el pipeline usando el modelo y tokenizador cargados
-generator = pipeline("text-generation", model=model,  tokenizer=tokenizer)
+generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,device=0 )
 
 
 # Configuración de logging
