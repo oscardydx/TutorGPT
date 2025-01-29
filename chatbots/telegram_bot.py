@@ -19,7 +19,7 @@ model_id ="Qwen/Qwen2.5-7B-Instruct"
 
 # Cargar el tokenizador y modelo
 tokenizer = AutoTokenizer.from_pretrained(model_id,padding_side="left")
-model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", offload_folder="offload_dir", torch_dtype=torch.float16).to(device)
+model = AutoModelForCausalLM.from_pretrained(model_id, device_map="None", offload_folder="offload_dir", torch_dtype=torch.float16).to(device)
 
 # Asignar manualmente el pad_token_id si es necesario
 if tokenizer.pad_token is None:
