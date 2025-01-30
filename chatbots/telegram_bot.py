@@ -20,16 +20,17 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 #model_id ="gpt2"
 model_id ="deepseek-ai/DeepSeek-V3"
 
+
 # Cargar el tokenizador y modelo
 tokenizer = AutoTokenizer.from_pretrained(model_id,padding_side="left")
-model = AutoModelForCausalLM.from_pretrained(model_id, device_map=None, offload_folder="offload_dir", torch_dtype=torch.float16).to(device)
+model = AutoModelForCausalLM.from_pretrained(model_id, device_map=None, offload_folder="offload_dir", torch_dtype=torch.float16,trust_remote_code=True).to(device)
 
 # Asignar manualmente el pad_token_id si es necesario
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
 # Crear el pipeline usando el modelo y tokenizador cargados
-generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,device=0 )
+generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,device=0,trust_remote_code=True )
 
 
 # Configuración de logging
