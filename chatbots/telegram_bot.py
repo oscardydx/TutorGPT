@@ -6,6 +6,9 @@ from transformers import pipeline
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
+import sys
+print("version python {sys.version}")
+
 import torchvision
 torch.cuda.empty_cache()
 torch.cuda.reset_peak_memory_stats()
@@ -18,9 +21,11 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 #model_id = "meta-llama/Llama-3.2-3B-Instruct"
 #model_id ="Qwen/Qwen2.5-7B-Instruct"
 #model_id ="gpt2"
+
+model_id = "meta-llama/Llama-3.3-70B-Instruct"
 #model_id ="deepseek-ai/DeepSeek-V3"
 
-model_id ="deepseek-ai/DeepSeek-R1"
+#model_id ="deepseek-ai/DeepSeek-R1"
 
 # Cargar el tokenizador y modelo
 tokenizer = AutoTokenizer.from_pretrained(model_id,padding_side="left")
