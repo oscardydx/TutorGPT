@@ -7,7 +7,11 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
 import sys
-print("version python {sys.version}")
+print(f"version python {sys.version}")
+
+from huggingface_hub import login
+# Iniciar sesión en Hugging Face con tu token
+login(config("HUGGENSFACESECRET"))
 
 import torchvision
 torch.cuda.empty_cache()
