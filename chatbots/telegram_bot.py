@@ -16,9 +16,9 @@ print(f"Torchvision version: {torchvision.__version__}")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 #model_id = "meta-llama/Llama-3.2-3B-Instruct"
-model_id ="Qwen/Qwen2.5-7B-Instruct"
+#model_id ="Qwen/Qwen2.5-7B-Instruct"
 #model_id ="gpt2"
-#model_id ="deepseek-ai/DeepSeek-V3"
+model_id ="deepseek-ai/DeepSeek-V3"
 
 
 # Cargar el tokenizador y modelo
