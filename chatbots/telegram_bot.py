@@ -5,42 +5,80 @@ from decouple import config
 from transformers import pipeline
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
-
+import torchvision
 import sys
+
 print(f"version python {sys.version}")
 
 from huggingface_hub import login
 # Iniciar sesión en Hugging Face con tu token
 login(config("HUGGENSFACESECRET"))
 
-import torchvision
+import time
+from datetime import datetime
+from django.db import transaction
+from django.db.models import Model
+from asgiref.sync import sync_to_async
+
+
+
+import gc
+
+# 🔹 Liberar RAM antes de cargar el modelo
+gc.collect()
 torch.cuda.empty_cache()
-torch.cuda.reset_peak_memory_stats()
+
+import os
+import sys
+import django
+# Agrega la raíz del proyecto al sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+# Configura Django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "hello_world.settings")  # Reemplaza "myproject" con el nombre real de tu proyecto
+django.setup()
+
+# Ahora importa los modelos
+from chatbots.models import ExecutionModelTime
+
+
+# 🔹 Matar procesos que consumen memoria
+#os.system("kill -9 $(ps aux | grep python | awk '{print $2}')")
+
+#torch.cuda.reset_peak_memory_stats()
 
 print(f"PyTorch version: {torch.__version__}")
 print(f"Torchvision version: {torchvision.__version__}")
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-#model_id = "meta-llama/Llama-3.2-3B-Instruct"
+model_id = "meta-llama/Llama-3.2-3B-Instruct"
+##model_id = "deepseek-ai/deepseek-llm-7b-chat"
+##model_id = "deepseek-ai/deepseek-coder-1.3b-instruct"
 #model_id ="Qwen/Qwen2.5-7B-Instruct"
-#model_id ="gpt2"
-
-model_id = "meta-llama/Llama-3.3-70B-Instruct"
+##model_id ="gpt2-large"
+##model_id = "meta-llama/Llama-3.2-1B"
+#model_id = "meta-llama/Llama-3.3-70B-Instruct"
 #model_id ="deepseek-ai/DeepSeek-V3"
 
 #model_id ="deepseek-ai/DeepSeek-R1"
 
 # Cargar el tokenizador y modelo
+
 tokenizer = AutoTokenizer.from_pretrained(model_id,padding_side="left")
-model = AutoModelForCausalLM.from_pretrained(model_id, device_map=None, offload_folder="offload_dir", torch_dtype=torch.float16,trust_remote_code=True).to(device)
+model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", offload_folder="offload_dir", torch_dtype=torch.bfloat16,trust_remote_code=True).to(device)
+#model = AutoModelForCausalLM.from_pretrained(model_id, device_map="None", offload_folder="offload_dir", torch_dtype=torch.bfloat16,trust_remote_code=True).to(device)
 
 # Asignar manualmente el pad_token_id si es necesario
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
+
+
+
 # Crear el pipeline usando el modelo y tokenizador cargados
-generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,device=0,trust_remote_code=True )
+generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,trust_remote_code=True )
+#generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,device=0,trust_remote_code=True )
 
 
 # Configuración de logging
@@ -67,30 +105,74 @@ async def echo(update: Update, context):
     user_id = update.message.from_user.id
     user_message = update.message.text
 
-    # Iniciar una nueva conversación si es el primer mensaje
+    # Iniciar historial si es el primer mensaje
     if user_id not in user_conversations:
         user_conversations[user_id] = []
 
-    # Añadir el mensaje del usuario al historial de conversación
+    # Añadir el mensaje del usuario
     user_conversations[user_id].append(f"Usuario: {user_message}")
 
-    # Solo utilizar el último mensaje para generar la respuesta
-    input_text = user_conversations[user_id][-1]
+    # Mantener un historial de 5 interacciones
+    context_window = 2
+    # Construir el contexto de la conversación con instrucciones claras
+    instructions = """Responde de manera clara y concisa. 
+No generes preguntas adicionales o notas a menos que el usuario lo solicite. 
+Si el usuario dice "gracias", responde solo con "¡De nada! 😊".
+"""
+    conversation_history = "\n".join(user_conversations[user_id][-context_window:])
+    
+    # Crear input_text con instrucciones y historial de la conversación
+    input_text = f"{instructions}\n{conversation_history}"
 
-    # Generar una respuesta con el modelo DialoGPT
-    conversation = generator(input_text, max_length=100, truncation=True)
+    #se agrega codigo para mejorar deepseek
 
-    # Imprimir la respuesta para depuración
-    print(conversation)  # Aquí vemos cómo está estructurada la respuesta
+    # Formato con roles
+    #input_text = f"""
+    #[system]
+    #{instructions}
 
-    # Acceder a la respuesta generada
-    bot_response = conversation[0]['generated_text']
+    #[user]
+    #{conversation_history}
 
-    # Añadir la respuesta del bot al historial de conversación
+    #[assistant]
+    #"""
+
+  
+    
+    start = time.time()
+
+    # Generar respuesta con el modelo
+    conversation = generator(input_text, max_new_tokens=250,  
+                            temperature=0.4, truncation=True,
+                            top_k=20, top_p=0.6, 
+                            repetition_penalty=1.5, return_full_text=False, do_sample=True)
+
+    bot_response = conversation[0]['generated_text'].replace(input_text, "").strip()
+
+   
+    
+    end = time.time()
+    
+    await save_execution_time(model_id, conversation_history, bot_response, start, end)
+    
+    # Guardar la respuesta del bot en el historial
     user_conversations[user_id].append(f"Bot: {bot_response}")
+    # Enviar respuesta al usuario
+    await update.message.reply_text(f"{bot_response}")
 
-    # Enviar la respuesta al usuario
-    await update.message.reply_text(f" {bot_response}")
+
+
+@sync_to_async
+def save_execution_time(model_id, input_text, bot_response, start, end):
+
+    execution = ExecutionModelTime.objects.create(model_name=model_id)
+    execution.pregunta = input_text
+    execution.respuesta = bot_response
+    execution.time = end - start
+    
+    execution.save()
+    print(execution.date)
+    print(f"Tiempo de ejecución: {end - start} segundos")
 
 # Función para manejar el número de teléfono enviado
 async def handle_contact(update: Update, context):
