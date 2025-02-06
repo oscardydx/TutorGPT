@@ -28,9 +28,14 @@ import gc
 gc.collect()
 torch.cuda.empty_cache()
 
+#Activar para gpus
+##torch.cuda.memory_allocated()
+##torch.cuda.memory_reserved()
+
 import os
 import sys
 import django
+
 # Agrega la raíz del proyecto al sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -60,8 +65,9 @@ model_id = "meta-llama/Llama-3.2-3B-Instruct"
 ##model_id = "meta-llama/Llama-3.2-1B"
 #model_id = "meta-llama/Llama-3.3-70B-Instruct"
 #model_id ="deepseek-ai/DeepSeek-V3"
-
 #model_id ="deepseek-ai/DeepSeek-R1"
+##model_id="Qwen/Qwen2.5-14B-Instruct-1M"
+#model_id="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
 
 # Cargar el tokenizador y modelo
 
