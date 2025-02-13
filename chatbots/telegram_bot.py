@@ -8,6 +8,9 @@ import torch
 import torchvision
 import sys
 
+
+from django.core.exceptions import ObjectDoesNotExist
+
 print(f"version python {sys.version}")
 
 from huggingface_hub import login
@@ -45,6 +48,7 @@ django.setup()
 
 # Ahora importa los modelos
 from chatbots.models import ExecutionModelTime
+from chatbots.models import Models
 
 
 # 🔹 Matar procesos que consumen memoria
@@ -57,7 +61,25 @@ print(f"Torchvision version: {torchvision.__version__}")
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-model_id = "meta-llama/Llama-3.2-3B-Instruct"
+##Buscar Modelo de lenguaje
+def buscar_modelo(id_model):
+    try:
+        return Models.objects.get(id=id_model)
+    except ObjectDoesNotExist:
+        return None  # Retorna None en lugar de False para evitar errores
+
+model_id=buscar_modelo(1).name
+max_new_tokens_value = float(buscar_modelo(1).max_new_tokens)
+temperature_value=  float(buscar_modelo(1).temperature)
+top_k_value=  int(buscar_modelo(1).top_k)
+top_p_value=  float(buscar_modelo(1).top_p)
+repetition_penalty_value=  float(buscar_modelo(1).repetition_penalty)
+
+model_parameters="max_new_tokens="+str(max_new_tokens_value)+"; temperature="+str(temperature_value) +"; top_k="+ str(top_k_value)+"; top_p="+ str(top_p_value)+"; repetition_penalty="+str(repetition_penalty_value)
+
+print(f"Modelo seleccionado: {model_id}")
+
+###model_id = "meta-llama/Llama-3.2-3B-Instruct"
 ##model_id = "deepseek-ai/deepseek-llm-7b-chat"
 ##model_id = "deepseek-ai/deepseek-coder-1.3b-instruct"
 #model_id ="Qwen/Qwen2.5-7B-Instruct"
@@ -67,7 +89,7 @@ model_id = "meta-llama/Llama-3.2-3B-Instruct"
 #model_id ="deepseek-ai/DeepSeek-V3"
 #model_id ="deepseek-ai/DeepSeek-R1"
 ##model_id="Qwen/Qwen2.5-14B-Instruct-1M"
-#model_id="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+##model_id="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
 
 # Cargar el tokenizador y modelo
 
@@ -78,9 +100,6 @@ model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", offloa
 # Asignar manualmente el pad_token_id si es necesario
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
-
-
-
 
 # Crear el pipeline usando el modelo y tokenizador cargados
 generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,trust_remote_code=True )
@@ -148,18 +167,21 @@ Si el usuario dice "gracias", responde solo con "¡De nada! 😊".
     start = time.time()
 
     # Generar respuesta con el modelo
-    conversation = generator(input_text, max_new_tokens=250,  
-                            temperature=0.4, truncation=True,
-                            top_k=20, top_p=0.6, 
-                            repetition_penalty=1.5, return_full_text=False, do_sample=True)
+    conversation = generator(input_text, max_new_tokens=350,  
+                            temperature=temperature_value, truncation=True,
+                            top_k=top_k_value, top_p=top_p_value, 
+                            repetition_penalty=repetition_penalty_value,
+                            return_full_text=False, do_sample=True)
 
     bot_response = conversation[0]['generated_text'].replace(input_text, "").strip()
 
    
     
     end = time.time()
-    
-    await save_execution_time(model_id, conversation_history, bot_response, start, end)
+
+    #conteo de tokens y guardado en base de datos
+    num_tokens = "; tokens_input="+str(len(tokenizer.encode(input_text, add_special_tokens=True)))+"; tokens_output="+str(len(tokenizer.encode(bot_response, add_special_tokens=True)))
+    await save_execution_time(model_id, conversation_history, bot_response, start, end,model_parameters+num_tokens)
     
     # Guardar la respuesta del bot en el historial
     user_conversations[user_id].append(f"Bot: {bot_response}")
@@ -169,12 +191,13 @@ Si el usuario dice "gracias", responde solo con "¡De nada! 😊".
 
 
 @sync_to_async
-def save_execution_time(model_id, input_text, bot_response, start, end):
+def save_execution_time(model_id, input_text, bot_response, start, end,parameters):
 
     execution = ExecutionModelTime.objects.create(model_name=model_id)
     execution.pregunta = input_text
     execution.respuesta = bot_response
     execution.time = end - start
+    execution.parameters = parameters
     
     execution.save()
     print(execution.date)
