@@ -50,6 +50,30 @@ django.setup()
 from chatbots.models import ExecutionModelTime
 from chatbots.models import Models
 
+#importar modelo yandex desde la API 
+import requests
+def yandex_gpt_request(prompt, temperature, max_tokens):
+    headers = {
+        "Authorization": f"Bearer {config("IAM_TOKEN")}",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "modelUri": f"gpt://{config("FOLDER_ID")}/yandexgpt/latest",
+        "completionOptions": {
+            "stream": False,
+            "temperature": temperature,
+            "maxTokens": max_tokens
+        },
+        "messages": [{"role": "user", "text": prompt}]
+    }
+
+    response = requests.post(config("ENDPOINT"), json=data, headers=headers)
+    
+    if response.status_code == 200:
+        return response.json().get("result", {}).get("alternatives", [{}])[0].get("message", {}).get("text", "")
+    else:
+        return f"Error {response.status_code}: {response.text}"
 
 # 🔹 Matar procesos que consumen memoria
 #os.system("kill -9 $(ps aux | grep python | awk '{print $2}')")
@@ -59,7 +83,7 @@ from chatbots.models import Models
 print(f"PyTorch version: {torch.__version__}")
 print(f"Torchvision version: {torchvision.__version__}")
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 ##Buscar Modelo de lenguaje
 def buscar_modelo(id_model):
@@ -68,42 +92,33 @@ def buscar_modelo(id_model):
     except ObjectDoesNotExist:
         return None  # Retorna None en lugar de False para evitar errores
 
-model_id=buscar_modelo(1).name
-max_new_tokens_value = float(buscar_modelo(1).max_new_tokens)
-temperature_value=  float(buscar_modelo(1).temperature)
-top_k_value=  int(buscar_modelo(1).top_k)
-top_p_value=  float(buscar_modelo(1).top_p)
-repetition_penalty_value=  float(buscar_modelo(1).repetition_penalty)
+model_id=buscar_modelo(2)
+
+max_new_tokens_value = float(model_id.max_new_tokens)
+temperature_value=  float(model_id.temperature)
+top_k_value=  int(model_id.top_k)
+top_p_value=  float(model_id.top_p)
+repetition_penalty_value=  float(model_id.repetition_penalty)
 
 model_parameters="max_new_tokens="+str(max_new_tokens_value)+"; temperature="+str(temperature_value) +"; top_k="+ str(top_k_value)+"; top_p="+ str(top_p_value)+"; repetition_penalty="+str(repetition_penalty_value)
 
 print(f"Modelo seleccionado: {model_id}")
 
-###model_id = "meta-llama/Llama-3.2-3B-Instruct"
-##model_id = "deepseek-ai/deepseek-llm-7b-chat"
-##model_id = "deepseek-ai/deepseek-coder-1.3b-instruct"
-#model_id ="Qwen/Qwen2.5-7B-Instruct"
-##model_id ="gpt2-large"
-##model_id = "meta-llama/Llama-3.2-1B"
-#model_id = "meta-llama/Llama-3.3-70B-Instruct"
-#model_id ="deepseek-ai/DeepSeek-V3"
-#model_id ="deepseek-ai/DeepSeek-R1"
-##model_id="Qwen/Qwen2.5-14B-Instruct-1M"
-##model_id="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+
 
 # Cargar el tokenizador y modelo
+if(model_id.API==False):
+    tokenizer = AutoTokenizer.from_pretrained(model_id,padding_side="left")
+    model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", offload_folder="offload_dir", torch_dtype=torch.bfloat16,trust_remote_code=True)
 
-tokenizer = AutoTokenizer.from_pretrained(model_id,padding_side="left")
-model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", offload_folder="offload_dir", torch_dtype=torch.bfloat16,trust_remote_code=True).to(device)
-#model = AutoModelForCausalLM.from_pretrained(model_id, device_map="None", offload_folder="offload_dir", torch_dtype=torch.bfloat16,trust_remote_code=True).to(device)
 
-# Asignar manualmente el pad_token_id si es necesario
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
+    # Asignar manualmente el pad_token_id si es necesario
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
-# Crear el pipeline usando el modelo y tokenizador cargados
-generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,trust_remote_code=True )
-#generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,device=0,trust_remote_code=True )
+    # Crear el pipeline usando el modelo y tokenizador cargados
+    generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,trust_remote_code=True )
+    #generator = pipeline("text-generation", model=model,  tokenizer=tokenizer,device=0,trust_remote_code=True )
 
 
 # Configuración de logging
@@ -137,7 +152,7 @@ async def echo(update: Update, context):
     # Añadir el mensaje del usuario
     user_conversations[user_id].append(f"Usuario: {user_message}")
 
-    # Mantener un historial de 5 interacciones
+    # Mantener un historial de N interacciones
     context_window = 2
     # Construir el contexto de la conversación con instrucciones claras
     instructions = """Responde de manera clara y concisa. 
@@ -165,23 +180,28 @@ Si el usuario dice "gracias", responde solo con "¡De nada! 😊".
   
     
     start = time.time()
+    bot_response=""
+    if(model_id.API):
+        bot_response = yandex_gpt_request(input_text,temperature_value,int(max_new_tokens_value))
+    else:
+        # Generar respuesta con el modelo
+        conversation = generator(input_text, max_new_tokens=max_new_tokens_value,  
+                                temperature=temperature_value, truncation=True,
+                                top_k=top_k_value, top_p=top_p_value, 
+                                repetition_penalty=repetition_penalty_value,
+                                return_full_text=False, do_sample=True)
 
-    # Generar respuesta con el modelo
-    conversation = generator(input_text, max_new_tokens=350,  
-                            temperature=temperature_value, truncation=True,
-                            top_k=top_k_value, top_p=top_p_value, 
-                            repetition_penalty=repetition_penalty_value,
-                            return_full_text=False, do_sample=True)
-
-    bot_response = conversation[0]['generated_text'].replace(input_text, "").strip()
+        bot_response = conversation[0]['generated_text'].replace(input_text, "").strip()
 
    
     
     end = time.time()
 
     #conteo de tokens y guardado en base de datos
-    num_tokens = "; tokens_input="+str(len(tokenizer.encode(input_text, add_special_tokens=True)))+"; tokens_output="+str(len(tokenizer.encode(bot_response, add_special_tokens=True)))
-    await save_execution_time(model_id, conversation_history, bot_response, start, end,model_parameters+num_tokens)
+    num_tokens =""
+    if(model_id.API==False):
+        num_tokens = "; tokens_input="+str(len(tokenizer.encode(input_text, add_special_tokens=True)))+"; tokens_output="+str(len(tokenizer.encode(bot_response, add_special_tokens=True)))
+    await save_execution_time(model_id.name, conversation_history, bot_response, start, end,model_parameters+num_tokens)
     
     # Guardar la respuesta del bot en el historial
     user_conversations[user_id].append(f"Bot: {bot_response}")

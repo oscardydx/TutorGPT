@@ -36,6 +36,7 @@ class Models(models.Model):
     top_k= models.DecimalField(max_digits=5, decimal_places=2)
     top_p= models.DecimalField(max_digits=5, decimal_places=2)
     repetition_penalty= models.DecimalField(max_digits=5, decimal_places=2)
+    API= models.BooleanField(default=False)
     def __str__(self):
         return self.name
     
