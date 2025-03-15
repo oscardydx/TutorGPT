@@ -92,7 +92,7 @@ def buscar_modelo(id_model):
     except ObjectDoesNotExist:
         return None  # Retorna None en lugar de False para evitar errores
 
-model_id=buscar_modelo(2)
+model_id=buscar_modelo(1)
 
 max_new_tokens_value = float(model_id.max_new_tokens)
 temperature_value=  float(model_id.temperature)
@@ -103,13 +103,25 @@ repetition_penalty_value=  float(model_id.repetition_penalty)
 model_parameters="max_new_tokens="+str(max_new_tokens_value)+"; temperature="+str(temperature_value) +"; top_k="+ str(top_k_value)+"; top_p="+ str(top_p_value)+"; repetition_penalty="+str(repetition_penalty_value)
 
 print(f"Modelo seleccionado: {model_id}")
+from transformers import BitsAndBytesConfig
+
+quantization_config = BitsAndBytesConfig(load_in_8bit=True, llm_int8_enable_fp32_cpu_offload=True)
+
+model = AutoModelForCausalLM.from_pretrained(
+    model_id,
+    device_map="auto",
+    offload_folder="offload_dir",
+    trust_remote_code=True,
+    quantization_config=quantization_config
+)
 
 
 
 # Cargar el tokenizador y modelo
 if(model_id.API==False):
     tokenizer = AutoTokenizer.from_pretrained(model_id,padding_side="left")
-    model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", offload_folder="offload_dir", torch_dtype=torch.bfloat16,trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained(model_id,
+     device_map="auto", offload_folder="offload_dir",trust_remote_code=True,quantization_config=quantization_config)
 
 
     # Asignar manualmente el pad_token_id si es necesario

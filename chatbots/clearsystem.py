@@ -15,7 +15,7 @@ os.system("kill -9 $(ps aux | grep python  | awk '{print $2}')")
 
 
 
-#gpu_process_id = 3426828  # Reemplaza con el ID de tu proceso
+#gpu_process_id = 27602  # Reemplaza con el ID de tu proceso
 #os.system(f"kill -9 {gpu_process_id}")
 
 import os
