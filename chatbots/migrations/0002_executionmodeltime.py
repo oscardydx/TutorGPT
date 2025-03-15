@@ -27,6 +27,8 @@ class Migration(migrations.Migration):
                 ("respuesta", models.TextField(blank=True, null=True)),
                 ("start_time", models.DateTimeField(auto_now_add=True)),
                 ("end_time", models.DateTimeField(blank=True, null=True)),
+                ("good_feedback", models.BooleanField(blank=True, null=True)),
+                ("bug_report", models.BooleanField(blank=True, null=True)),
             ],
         ),
     ]
