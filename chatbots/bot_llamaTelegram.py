@@ -9,7 +9,7 @@ import torch
 import torchvision
 import sys
 import ollama
-
+ 
 
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -231,18 +231,20 @@ async def echo(update: Update, context):
     reply_markup = InlineKeyboardMarkup(keyboard)
     sent_message = await update.message.reply_text(f"Mensaje recibido: {bot_response}", reply_markup=reply_markup)
      
-    last_message[user_id] = {
-        "message_id": sent_message.message_id,
-        "text": bot_response
-    }
+ 
 
     end = time.time()
 
     #conteo de tokens y guardado en base de datos
     num_tokens =""
  
-    await save_execution_time(model_id.name, conversation_history, bot_response, start, end,model_parameters+num_tokens)
+    id_bd=await save_execution_time(model_id.name, conversation_history, bot_response, start, end,model_parameters+num_tokens)
     
+    last_message[user_id] = {
+        "message_id": sent_message.message_id,
+        "text": bot_response,
+        "id_bd": id_bd
+    }
     # Guardar la respuesta del bot en el historial
     user_conversations[user_id].append(f"Assistant {bot_response}")
    
@@ -262,26 +264,57 @@ async def translate(update: Update, context: CallbackContext):
         await query.message.reply_text("No hay un mensaje reciente para traducir.")
 
 async def thumbs_up(update: Update, context: CallbackContext):
+    print(f"Inicio de feedback ")
     query = update.callback_query
     user_id = query.from_user.id
-
+    #bug_report  
     if user_id in last_message:
-        translated_text = GoogleTranslator(source="auto", target="en").translate(last_message[user_id])
-        await query.message.reply_text(f"Traducción: {translated_text}")
+        print(f"id_bd: {last_message[user_id]['id_bd']}")
+        registro=await buscar_conversacion(last_message[user_id]["id_bd"])
+        registro.good_feedback=True
+        await sync_to_async(registro.save)() 
+        await query.message.reply_text(f"😊")
     else:
         await query.message.reply_text("No hay un mensaje reciente para traducir.")
+
+async def thumbs_down(update: Update, context: CallbackContext):
+    print(f"Inicio de feedback ")
+    query = update.callback_query
+    user_id = query.from_user.id
+    #bug_report  
+    if user_id in last_message:
+        print(f"id_bd: {last_message[user_id]['id_bd']}")
+        registro=await buscar_conversacion(last_message[user_id]["id_bd"])
+        registro.good_feedback=False
+        await sync_to_async(registro.save)() 
+        await query.message.reply_text(f"😊")
+    else:
+        await query.message.reply_text("No hay un mensaje reciente para traducir.")
+
 
 async def report_bug(update: Update, context: CallbackContext):
+    print(f"Inicio de bug ")
     query = update.callback_query
     user_id = query.from_user.id
-
+    #bug_report  
     if user_id in last_message:
-        translated_text = GoogleTranslator(source="auto", target="en").translate(last_message[user_id])
-        await query.message.reply_text(f"Traducción: {translated_text}")
+        print(f"id_bd: {last_message[user_id]['id_bd']}")
+        registro=await buscar_conversacion(last_message[user_id]["id_bd"])
+        registro.bug_report=True
+        await sync_to_async(registro.save)() 
+        await query.message.reply_text(f"😲")
     else:
         await query.message.reply_text("No hay un mensaje reciente para traducir.")
 
 
+
+##Buscar Modelo de lenguaje
+@sync_to_async
+def buscar_conversacion(id_message):
+    try:
+        return ExecutionModelTime.objects.get(id=id_message)
+    except ObjectDoesNotExist:
+        return None  # Retorna None en lugar de False para evitar errores
 
 @sync_to_async
 def save_execution_time(model_id, input_text, bot_response, start, end,parameters):
@@ -295,6 +328,7 @@ def save_execution_time(model_id, input_text, bot_response, start, end,parameter
     execution.save()
     print(execution.date)
     print(f"Tiempo de ejecución: {end - start} segundos")
+    return execution.id
 
 # Función para manejar el número de teléfono enviado
 async def handle_contact(update: Update, context):
@@ -322,6 +356,7 @@ def buscar_en_base_de_datos(phone_number):
     clientes = ['123456789', '987654321', '555555555']
     return phone_number in clientes
 
+
 # Configuración del bot
 def main():
     token = config("TOKEN_TELEGRAM")
@@ -331,13 +366,17 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.CONTACT, handle_contact))  # Añadir el handler para el contacto
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
-    app.add_handler(CallbackQueryHandler(translate))
-    app.add_handler(CallbackQueryHandler(thumbs_up))
-    app.add_handler(CallbackQueryHandler(report_bug))
+
+    # Manejo de botones específicos con filtros
+    app.add_handler(CallbackQueryHandler(translate, pattern="^translate$"))
+    app.add_handler(CallbackQueryHandler(thumbs_up, pattern="^thumbs_up$"))
+    app.add_handler(CallbackQueryHandler(thumbs_down, pattern="^thumbs_down$"))
+    app.add_handler(CallbackQueryHandler(report_bug, pattern="^report_bug$"))
 
     # Iniciar el bot
     print("Bot corriendo...")
     app.run_polling()
+
 
    
 
